@@ -1,9 +1,14 @@
 '''
 Support for APT (Advanced Packaging Tool)
 '''
+from __future__ import absolute_import
+
 # Import python libs
 import os
 import re
+import time
+
+import apt
 
 # Import Salt libs
 import salt.utils
@@ -37,6 +42,24 @@ def __init__(opts):
         }
         # Export these puppies so they persist
         os.environ.update(env_vars)
+
+_cache = None
+_cache_time = None
+def _get_cache():
+    global _cache, _cache_time
+    print "_cache", _cache
+    if _cache:
+        last_changed = os.stat('/var/lib/dpkg/status').st_mtime
+        print "last_changed", last_changed
+        if last_changed < _cache_time:
+            print "Cache hit"
+            return cache
+
+    print "Cache miss"
+    _cache_time = time.time()
+    _cache = apt.cache.Cache()
+    print "_cache", _cache
+    return _cache
 
 
 def available_version(name):
@@ -73,11 +96,11 @@ def version(name):
     # check for :i386 appended to 32bit name installed on 64bit machine
     name32bit = '{0}:i386'.format(name)
 
-    pkgs = list_pkgs(name)
-    if name in pkgs:
-        return pkgs[name]
-    if name32bit in pkgs:
-        return pkgs[name32bit]
+    cache = _get_cache()
+    if name in cache:
+        return cache[name].installedVersion
+    if name32bit in cache:
+        return cache[name32bit].installedVersion
     else:
         return ''
 
